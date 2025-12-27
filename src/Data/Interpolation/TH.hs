@@ -30,7 +30,6 @@ import Language.Haskell.TH
   , reportError
   )
 import qualified Language.Haskell.TH.Lib as TH
-import Language.Haskell.TH.Syntax (returnQ)
 
 
 import Data.Interpolation (FromTemplateValue, Interpolator (Interpolator), runInterpolator)
@@ -215,19 +214,19 @@ withPolymorphic_ qDecs = do
   case decs of
     -- "data" with a single record constructor:
     [DataD [] tName [] Nothing [RecC cName fields] deriv] -> do
-      let con = TH.recC (simpleName cName) (returnQ <$> (fieldToPolyField tName <$> fields))
-      primedDecl <- TH.dataD (pure []) (primedName tName) (fieldToTypeVar tName <$> fields) Nothing [con] (returnQ <$> deriv)
+      let con = TH.recC (simpleName cName) (pure <$> (fieldToPolyField tName <$> fields))
+      primedDecl <- TH.dataD (pure []) (primedName tName) (fieldToTypeVar tName <$> fields) Nothing [con] (pure <$> deriv)
       normalSyn <- TH.tySynD (simpleName tName) [] $
-        returnQ $ foldl (\ t v -> AppT t (fieldToSimpleType v)) (ConT (primedName tName)) fields
+        pure $ foldl (\ t v -> AppT t (fieldToSimpleType v)) (ConT (primedName tName)) fields
       pure (primedDecl, normalSyn)
 
     -- "newtype" with a single record constructor:
     [NewtypeD [] tName [] Nothing (RecC cName [field]) deriv] -> do
       -- TODO: use the type name, lower-cased, instead of the field name, for the type var?
-      let con = TH.recC (simpleName cName) (returnQ <$> [fieldToPolyField tName field])
-      primedDecl <- TH.newtypeD (pure []) (primedName tName) [fieldToTypeVar tName field] Nothing con (returnQ <$> deriv)
+      let con = TH.recC (simpleName cName) (pure <$> [fieldToPolyField tName field])
+      primedDecl <- TH.newtypeD (pure []) (primedName tName) [fieldToTypeVar tName field] Nothing con (pure <$> deriv)
       normalSyn <- TH.tySynD (simpleName tName) [] $
-        returnQ $ AppT (ConT (primedName tName)) (fieldToSimpleType field)
+        pure $ AppT (ConT (primedName tName)) (fieldToSimpleType field)
       pure (primedDecl, normalSyn)
 
     -- "data" with multiple simple constructors:
@@ -241,9 +240,9 @@ withPolymorphic_ qDecs = do
             other -> fail $ "Can't handle constructor: " <> pprint other
 
       (vars, constrs', ts) <- unzip3 <$> traverse mapConstr constrs
-      primedDecl <- TH.dataD (pure []) (primedName tName) (catMaybes vars) Nothing (returnQ <$> constrs') (returnQ <$> deriv)
+      primedDecl <- TH.dataD (pure []) (primedName tName) (catMaybes vars) Nothing (pure <$> constrs') (pure <$> deriv)
       normalSyn <- TH.tySynD (simpleName tName) [] $
-        returnQ $ foldl AppT (ConT (primedName tName)) (catMaybes ts)
+        pure $ foldl AppT (ConT (primedName tName)) (catMaybes ts)
       pure (primedDecl, normalSyn)
 
     _ -> do
@@ -293,7 +292,7 @@ deriveUninterpolated_ dec = do
 -- to that type, with its structure left intact.
 mapUninterp :: Type -> Q Type
 mapUninterp typ = do
-  uninterp <- lookupTypeName "Uninterpolated" >>= maybe (fail "Uninterpolated not in scope") returnQ
+  uninterp <- lookupTypeName "Uninterpolated" >>= maybe (fail "Uninterpolated not in scope") pure
   let wrap = AppT (ConT uninterp)
 
       -- Apply only to the _right_ side of (nested) AppTs:
